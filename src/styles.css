@@ -46,6 +46,20 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-navy-foreground: var(--navy-foreground);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --color-cat-fan: var(--cat-fan);
+  --color-cat-motor: var(--cat-motor);
+  --color-cat-housing: var(--cat-housing);
+  --color-cat-wiring: var(--cat-wiring);
+  --color-cat-misc: var(--cat-misc);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -63,25 +77,44 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  /* Crestar palette */
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.20 0.04 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
+  --card-foreground: oklch(0.20 0.04 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --popover-foreground: oklch(0.20 0.04 260);
+  /* Crestar green #00B87A */
+  --primary: oklch(0.68 0.16 158);
+  --primary-foreground: oklch(1 0 0);
+  /* Navy #1A2B4A */
+  --secondary: oklch(0.27 0.06 260);
+  --secondary-foreground: oklch(0.98 0.003 247);
+  --muted: oklch(0.96 0.005 250);
+  --muted-foreground: oklch(0.50 0.03 260);
+  --accent: oklch(0.94 0.02 158);
+  --accent-foreground: oklch(0.27 0.06 260);
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.92 0.01 250);
+  --input: oklch(0.92 0.01 250);
+  --ring: oklch(0.68 0.16 158);
+
+  /* Crestar custom tokens */
+  --navy: oklch(0.27 0.06 260);
+  --navy-deep: oklch(0.22 0.05 260);
+  --navy-foreground: oklch(0.98 0.003 247);
+  --green: oklch(0.68 0.16 158);
+  --green-soft: oklch(0.94 0.05 158);
+  --amber: oklch(0.78 0.16 75);
+  --amber-soft: oklch(0.95 0.06 80);
+  --red: oklch(0.62 0.22 27);
+  --red-soft: oklch(0.95 0.05 27);
+  --cat-fan: oklch(0.68 0.16 158);
+  --cat-motor: oklch(0.62 0.18 245);
+  --cat-housing: oklch(0.72 0.17 55);
+  --cat-wiring: oklch(0.58 0.20 300);
+  --cat-misc: oklch(0.68 0.01 250);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
