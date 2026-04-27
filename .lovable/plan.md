@@ -1,64 +1,61 @@
-## Goal
+## Goals
 
-Turn the current 6-zone uniform racking scene into a realistic mixed-layout warehouse with **5 distinct areas** — some high-racking (ladder/forklift retrieval), some open-floor stack zones (boxes piled directly on the floor) — and make the whole 3D scene **drag-to-orbit + scroll-to-zoom** so the user can inspect from any angle.
+1. **Calmer interaction** — drop the free orbit/zoom (it's causing motion sickness). Replace with a small set of **fixed preset camera angles** the user picks from (Isometric · Front · Top-down). No more drag-to-rotate.
+2. **Zone selector dropdown** — dropdown to focus a single zone (A–E) or "Overall view" showing all 5 zones at once. When a zone is focused, the camera frames just that zone and the others fade back.
+3. **More realistic, "lived-in" item placement** — items still belong to category groups, but within each zone they are scattered with imperfections: gaps between cartons, misaligned stacks, slight rotation, mixed sizes, occasional empty bays. Looks like a real warehouse, not a perfect grid.
+4. **Always 3D boxes** — when filtering by product, the highlighted boxes stay as 3D cuboids (currently they look correct already; we will keep that and just make sure the dim state doesn't flatten them — keep stroke + 3D faces visible even when dimmed).
 
-## The 5 areas
+## UX changes
 
-Laid out on a single floor slab, each clearly labelled:
-
-1. **Zone A — High Racking (Fan Blades)**
-   2 tall racks, 5 levels each, ladder icon at the aisle. Holds long fan-blade cartons (Wooden / Metal / Plastic, 36–52").
-2. **Zone B — High Racking (Motor Components)**
-   2 tall racks, 4 levels, forklift silhouette parked at end. Motor Type-A/B + capacitors.
-3. **Zone C — Open Floor Stack (Housing Parts)**
-   No racks. Large casing boxes stacked 2–3 high directly on the floor in pallet-sized clusters (Casing L, Casing M, Mounting Brackets). Pallet outlines painted on floor.
-4. **Zone D — Open Floor Stack (Misc Hardware)**
-   Smaller cartons (Screws, Pull Chains, LED globes) stacked in tighter clusters, some 4 high.
-5. **Zone E — Mid Shelving (Wiring Kits)**
-   Short 2-level shelving units accessible without equipment. Standard / Premium kits + RF modules.
-
-Receiving Bay (top edge) and Dispatch Bay (bottom edge) remain. Equipment props (ladder near A, forklift near B, pallet jack near C) added as simple cuboid silhouettes for context.
-
-## Drag-to-inspect interaction
-
-Replace the fixed `rotateX(58deg) rotateZ(-32deg)` transform with stateful camera angles:
-
-- **Left-mouse drag** → orbit (updates `rotateX` pitch 25–80°, `rotateZ` yaw −180–180°)
-- **Scroll wheel** → zoom (scale 0.5–1.6)
-- **Shift+drag** (or middle-mouse) → pan (translate offset)
-- **Double-click empty floor** → reset camera to default isometric
-- **Click a box** → still opens the existing inspection tooltip (unchanged)
-
-A small HUD bottom-left shows: "Drag to orbit · Scroll to zoom · Shift+drag to pan · Double-click to reset". Cursor changes to `grab` / `grabbing` during drag. Drag is suppressed when the click originates on a box so single-click selection still works.
-
-All handlers are pointer-events on the scene container; no extra libraries needed.
-
-## Data model changes (`src/lib/warehouse-data.ts`)
-
-Extend `StorageUnit` with:
-- `area: "rack-high" | "rack-mid" | "floor-stack"` — render mode
-- `stack: number` — for floor-stack: how high in a pile (0 = bottom)
-- `cluster: number` — for floor-stack: which pallet cluster within the zone
-- `level` stays for racked items (now supports up to 5 levels)
-
-Rebuild the unit generator into 5 zones (A–E) instead of 6, with category and area mappings above. Total unit count stays ~80–90.
+- Add a **View dropdown** in the existing filter bar (`src/routes/index.tsx`) with options:
+  - Overall view (all zones) — default
+  - Zone A — High Racking · Fan Blades
+  - Zone B — High Racking · Motor Components
+  - Zone C — Open Floor Stack · Housing Parts
+  - Zone D — Open Floor Stack · Misc Hardware
+  - Zone E — Mid Shelving · Wiring Kits
+- Add a **Camera angle** segmented control (3 buttons) in the floor's HUD: `Iso` / `Front` / `Top`.
+- Remove drag-to-orbit, scroll-zoom, shift-pan, double-click-reset, "Reset view" button. Replace HUD text with: "Use the View dropdown and camera angles to navigate · Click any box to inspect".
 
 ## Component changes (`src/components/WarehouseFloor.tsx`)
 
-- Add `useRef` + pointer event handlers and `useState` for `{pitch, yaw, zoom, panX, panY}`. Apply them to the scene transform.
-- Replace `ZONE_LAYOUT` with 5 zone definitions including `area` and per-zone footprint (rack zones are deep×narrow, floor zones are wider squares).
-- New `FloorStackCluster` helper: renders N cuboids stacked vertically + side-by-side on a painted pallet rectangle on the floor. No `RackFrame`.
-- Existing `RackFrame` extended to accept `levels` (4 or 5) for high racking.
-- Add small static prop cuboids for ladder (thin tall rectangle with rungs drawn as inset shadows) and forklift (low body + mast rectangle) — purely decorative.
-- Highlight / dim / glow / click-to-select behavior is preserved for all rendering modes.
+- New props: `focusZone: "all" | "A"…"E"`.
+- Replace pointer/wheel handlers + `cam` state with:
+  - `angle: "iso" | "front" | "top"` state (default `iso`)
+  - Derived camera transform from a lookup table of `{pitch, yaw, scale}` per angle.
+  - When `focusZone !== "all"`, compute the focused zone's bounding box from `placements` and translate the scene so that zone is centered + scaled up ~1.5x. Other zones get `opacity: 0.18` + greyscale to recede.
+- Remove `useEffect` wheel listener, `dragRef`, `onPointerDown/Move/Up`, `onWheel`, `onDoubleClick`.
+- Keep all rendering (racks, pallets, ladder, forklift, dispatch/receiving). Keep click-to-inspect tooltip.
+- For dim state on `Cuboid`: keep current opacity but drop it less aggressively (0.35 → keep 0.55 as already implemented) and ensure all 5 cuboid faces still render (already true). No flattening to 2D anywhere.
+- Camera presets:
+  - `iso`:   pitch 58°, yaw -32°, scale 0.9
+  - `front`: pitch 78°, yaw 0°,   scale 0.85
+  - `top`:   pitch 0°,  yaw 0°,   scale 0.85
 
-## Out of scope
+## Realism in placement (`src/lib/warehouse-data.ts`)
 
-- True WebGL / Three.js (keeping pure CSS 3D for performance and consistency with current look).
-- Editing inventory by dragging boxes between locations (drag here = camera only).
-- Changes to Forecast, Routes, or Assistant screens.
+Update the unit generator so it no longer fills a perfect grid:
+
+- **Rack zones**: keep level + bay structure, but introduce per-unit jitter:
+  - `dx`, `dy`: small offset within bay (-4..+4 px) so cartons don't sit flush
+  - `rot`: tiny rotation (-6°..+6°)
+  - `sizeMul`: 0.85, 1.0, or 1.15 — vary carton width so some bays look heavier
+  - Skip ~10% of bays randomly so there are visible empty shelves
+  - Same category clusters together (already the case per zone), but variants within mix more freely
+- **Floor-stack zones**: vary stack height per cluster more (1–4), allow misalignment between stacked levels (`dx`, `dy` jitter per stacked carton), allow some pallet cells to be empty (~15%), occasional rotation. Cartons in a single cluster can be a mix of 2 variants from that zone's category.
+
+Add fields `dx: number; dy: number; rot: number; sizeMul: number;` to `StorageUnit` (deterministic, derived from a seeded hash of the id so layout stays stable across renders).
+
+Render code applies these via `transform: translate(dx, dy) rotateZ(rot)` on each box wrapper, and uses `sizeMul` on `boxW`/`palletBoxW`.
 
 ## Files touched
 
-- `src/lib/warehouse-data.ts` — extend type, regenerate units across 5 mixed-layout zones
-- `src/components/WarehouseFloor.tsx` — orbit camera + floor-stack rendering + equipment props + 5-zone layout
+- `src/components/WarehouseFloor.tsx` — replace orbit camera with angle presets + zone focus; apply per-unit jitter; HUD updated
+- `src/lib/warehouse-data.ts` — add jitter/rotation/size fields, generate them deterministically, allow empty cells & varied stack heights
+- `src/routes/index.tsx` — add View dropdown (focusZone), pass to `WarehouseFloor`; minor copy update; segmented camera control rendered inside the floor (not here)
+
+## Out of scope
+
+- True WebGL/Three.js (still pure CSS 3D — same look, much calmer interaction).
+- Drag-to-rearrange items.
+- Persisting selected zone/angle across reloads.

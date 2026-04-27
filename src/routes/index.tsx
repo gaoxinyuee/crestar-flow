@@ -9,6 +9,7 @@ import {
   unitMatchesVariant,
   type Category,
   categoryMeta,
+  ZONES,
 } from "@/lib/warehouse-data";
 
 export const Route = createFileRoute("/")({
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/")({
 function WarehousePage() {
   const [category, setCategory] = useState<"all" | Category>("all");
   const [variant, setVariant] = useState<string>("all");
+  const [focusZone, setFocusZone] = useState<"all" | string>("all");
 
   const visibleCount = useMemo(() => {
     return units.filter((u) => {
@@ -55,6 +57,20 @@ function WarehousePage() {
 
         {/* Filter bar */}
         <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">View</label>
+            <select
+              value={focusZone}
+              onChange={(e) => setFocusZone(e.target.value)}
+              className="px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium"
+            >
+              <option value="all">Overall view (all zones)</option>
+              {ZONES.map((z) => (
+                <option key={z.id} value={z.id}>Zone {z.id} — {z.label}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Product</label>
             <select
@@ -110,7 +126,7 @@ function WarehousePage() {
 
         {/* Floor */}
         <div className="flex-1 bg-card border border-border rounded-xl min-h-[560px] overflow-hidden">
-          <WarehouseFloor category={category} variant={variant} />
+          <WarehouseFloor category={category} variant={variant} focusZone={focusZone} />
         </div>
       </div>
     </AppLayout>
