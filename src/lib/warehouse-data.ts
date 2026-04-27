@@ -14,6 +14,8 @@ export interface StorageUnit {
   // grid coords (col, row) on the warehouse floor
   x: number;
   y: number;
+  // shelf tier: 0 = ground, 1 = mid, 2 = top
+  level: number;
 }
 
 export const categoryMeta: Record<Category, { label: string; color: string; tw: string }> = {
@@ -55,8 +57,11 @@ function makeUnit(
   qty: number,
 ): StorageUnit {
   const { zr, zc } = zonePos(zoneIdx);
-  const x = zc * 7 + cellCol; // 5 cols + 2 gap
-  const y = zr * 5 + cellRow; // 3 rows + 2 gap
+  // Each zone is one rack: 5 bays wide x 1 rack-deep x 3 levels tall.
+  // We pack 15 units/zone as 5 cols x 3 levels (cellRow becomes the level).
+  const x = zc * 7 + cellCol;
+  const y = zr * 3 + 0; // racks are deep=1; rows 0..2 stack vertically (level)
+  const level = cellRow; // 0,1,2
   const zone = zones[zoneIdx];
   const shelf = String.fromCharCode(65 + (cellCol % 5));
   return {
@@ -66,12 +71,13 @@ function makeUnit(
     variant,
     category: cat,
     zone,
-    row: cellRow + 1,
+    row: level + 1,
     shelf,
     qty,
     updated: `2025-01-${String(10 + (i % 18)).padStart(2, "0")} 0${(i % 9) + 1}:${String((i * 7) % 60).padStart(2, "0")}`,
     x,
     y,
+    level,
   };
 }
 
