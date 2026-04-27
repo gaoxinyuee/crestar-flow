@@ -1,4 +1,5 @@
 export type Category = "fan" | "motor" | "housing" | "wiring" | "misc";
+export type AreaType = "rack-high" | "rack-mid" | "floor-stack";
 
 export interface StorageUnit {
   id: string;
@@ -7,15 +8,21 @@ export interface StorageUnit {
   variant: string;
   category: Category;
   zone: string;
-  row: number;
-  shelf: string;
+  area: AreaType;
   qty: number;
   updated: string;
-  // grid coords (col, row) on the warehouse floor
-  x: number;
-  y: number;
-  // shelf tier: 0 = ground, 1 = mid, 2 = top
+
+  // Rack items: bay column (0..n) + level (0..levels-1)
+  bay: number;
   level: number;
+
+  // Floor-stack items: cluster index + position within pallet (col,row) + stack height
+  cluster: number;
+  cx: number; // col within pallet
+  cy: number; // row within pallet
+  stack: number; // 0 = bottom
+
+  shelfLabel: string;
 }
 
 export const categoryMeta: Record<Category, { label: string; color: string; tw: string }> = {
@@ -26,110 +33,147 @@ export const categoryMeta: Record<Category, { label: string; color: string; tw: 
   misc: { label: "Misc Hardware", color: "var(--cat-misc)", tw: "bg-cat-misc" },
 };
 
-export const fanVariants = [
-  "Wooden Blades",
-  "Metal Blades",
-  "Plastic Blades",
-  "52-inch",
-  "46-inch",
-  "36-inch",
-];
-
-// Build a deterministic grid of ~90 units across 6 zones (A-F)
-// Layout: 3 zone rows x 2 zone cols. Each zone = 5 cols x 3 rows of units = 15 units.
-const zones = ["A", "B", "C", "D", "E", "F"];
-
-function zonePos(idx: number) {
-  const zr = Math.floor(idx / 2); // 0..2
-  const zc = idx % 2; // 0..1
-  return { zr, zc };
+export interface ZoneSpec {
+  id: string;
+  label: string;
+  area: AreaType;
+  category: Category;
+  // For racks
+  rackCount?: number; // number of racks side by side
+  baysPerRack?: number;
+  levels?: number;
+  // For floor-stack
+  clusters?: number;
+  palletCols?: number;
+  palletRows?: number;
+  maxStack?: number;
 }
 
-function makeUnit(
-  i: number,
-  zoneIdx: number,
-  cellCol: number,
-  cellRow: number,
-  cat: Category,
-  variant: string,
-  baseName: string,
-  skuPrefix: string,
-  qty: number,
-): StorageUnit {
-  const { zr, zc } = zonePos(zoneIdx);
-  // Each zone is one rack: 5 bays wide x 1 rack-deep x 3 levels tall.
-  // We pack 15 units/zone as 5 cols x 3 levels (cellRow becomes the level).
-  const x = zc * 7 + cellCol;
-  const y = zr * 3 + 0; // racks are deep=1; rows 0..2 stack vertically (level)
-  const level = cellRow; // 0,1,2
-  const zone = zones[zoneIdx];
-  const shelf = String.fromCharCode(65 + (cellCol % 5));
-  return {
-    id: `${zone}-${i}`,
-    sku: `${skuPrefix}-${String(100 + i).padStart(3, "0")}`,
-    name: baseName,
-    variant,
-    category: cat,
-    zone,
-    row: level + 1,
-    shelf,
-    qty,
-    updated: `2025-01-${String(10 + (i % 18)).padStart(2, "0")} 0${(i % 9) + 1}:${String((i * 7) % 60).padStart(2, "0")}`,
-    x,
-    y,
-    level,
-  };
+export const ZONES: ZoneSpec[] = [
+  { id: "A", label: "High Racking — Fan Blades",     area: "rack-high",  category: "fan",     rackCount: 2, baysPerRack: 4, levels: 5 },
+  { id: "B", label: "High Racking — Motor Components", area: "rack-high", category: "motor",   rackCount: 2, baysPerRack: 4, levels: 4 },
+  { id: "C", label: "Open Floor Stack — Housing Parts", area: "floor-stack", category: "housing", clusters: 3, palletCols: 2, palletRows: 2, maxStack: 3 },
+  { id: "D", label: "Open Floor Stack — Misc Hardware", area: "floor-stack", category: "misc", clusters: 4, palletCols: 2, palletRows: 2, maxStack: 4 },
+  { id: "E", label: "Mid Shelving — Wiring Kits",     area: "rack-mid",   category: "wiring",  rackCount: 2, baysPerRack: 4, levels: 2 },
+];
+
+// Variant pools per category (cycled through to fill)
+const variantPools: Record<Category, Array<{ variant: string; name: string; sku: string; qty: number }>> = {
+  fan: [
+    { variant: "Wooden Blades 52-inch", name: "Fan Blade 52\" Wooden", sku: "FB-W52", qty: 4 },
+    { variant: "Wooden Blades 46-inch", name: "Fan Blade 46\" Wooden", sku: "FB-W46", qty: 6 },
+    { variant: "Metal Blades 52-inch",  name: "Fan Blade 52\" Metal",  sku: "FB-M52", qty: 8 },
+    { variant: "Metal Blades 46-inch",  name: "Fan Blade 46\" Metal",  sku: "FB-M46", qty: 5 },
+    { variant: "Plastic Blades 36-inch",name: "Fan Blade 36\" Plastic",sku: "FB-P36", qty: 12 },
+  ],
+  motor: [
+    { variant: "Motor Unit Type-A", name: "Motor Unit Type-A",   sku: "MT-A",   qty: 3 },
+    { variant: "Motor Unit Type-B", name: "Motor Unit Type-B",   sku: "MT-B",   qty: 6 },
+    { variant: "Motor Capacitor",   name: "Motor Capacitor 4uF", sku: "MT-CAP", qty: 24 },
+  ],
+  housing: [
+    { variant: "Housing Casing L", name: "Housing Casing L",    sku: "HC-L",  qty: 4 },
+    { variant: "Housing Casing M", name: "Housing Casing M",    sku: "HC-M",  qty: 5 },
+    { variant: "Mounting Bracket", name: "Ceiling Mount Bracket", sku: "HC-MB", qty: 12 },
+  ],
+  wiring: [
+    { variant: "Wiring Kit Standard",     name: "Wiring Kit Standard", sku: "WK-S",  qty: 3 },
+    { variant: "Wiring Kit Premium",      name: "Wiring Kit Premium",  sku: "WK-P",  qty: 4 },
+    { variant: "Remote Control Module",   name: "RF Remote Module",    sku: "WK-RF", qty: 9 },
+  ],
+  misc: [
+    { variant: "Screw Pack M6", name: "Screw Pack M6 (50pc)", sku: "MS-S6", qty: 30 },
+    { variant: "Pull Chain",    name: "Brass Pull Chain",     sku: "MS-PC", qty: 14 },
+    { variant: "Light Globe",   name: "LED Light Globe",      sku: "MS-LG", qty: 8 },
+  ],
+};
+
+function pickVariant(cat: Category, idx: number) {
+  const pool = variantPools[cat];
+  return pool[idx % pool.length];
 }
 
-// Distribution plan per zone: which categories occupy which cells
-// We'll create a flat list, total ~90 units (15 per zone)
-const plan: Array<{
-  cat: Category;
-  variant: string;
-  name: string;
-  sku: string;
-  qty: number;
-}> = [];
+function dateStr(i: number): string {
+  return `2025-01-${String(10 + (i % 18)).padStart(2, "0")} 0${(i % 9) + 1}:${String((i * 7) % 60).padStart(2, "0")}`;
+}
 
-// Fan blades: 20 units total, with variant breakdown
-// 5 Wooden 52", 5 Wooden 46", 4 Metal 52", 3 Metal 46", 3 Plastic 36"
-const fanList = [
-  ...Array(5).fill({ variant: "Wooden Blades 52-inch", name: "Fan Blade 52\" Wooden", sku: "FB-W52", qty: 4 }),
-  ...Array(5).fill({ variant: "Wooden Blades 46-inch", name: "Fan Blade 46\" Wooden", sku: "FB-W46", qty: 6 }),
-  ...Array(4).fill({ variant: "Metal Blades 52-inch", name: "Fan Blade 52\" Metal", sku: "FB-M52", qty: 8 }),
-  ...Array(3).fill({ variant: "Metal Blades 46-inch", name: "Fan Blade 46\" Metal", sku: "FB-M46", qty: 5 }),
-  ...Array(3).fill({ variant: "Plastic Blades 36-inch", name: "Fan Blade 36\" Plastic", sku: "FB-P36", qty: 12 }),
-];
-fanList.forEach((f) => plan.push({ cat: "fan", ...f }));
+function buildUnits(): StorageUnit[] {
+  const out: StorageUnit[] = [];
+  let counter = 0;
 
-// Motor: 18 units
-for (let i = 0; i < 10; i++) plan.push({ cat: "motor", variant: "Motor Unit Type-A", name: "Motor Unit Type-A", sku: "MT-A", qty: 3 });
-for (let i = 0; i < 5; i++) plan.push({ cat: "motor", variant: "Motor Unit Type-B", name: "Motor Unit Type-B", sku: "MT-B", qty: 6 });
-for (let i = 0; i < 3; i++) plan.push({ cat: "motor", variant: "Motor Capacitor", name: "Motor Capacitor 4uF", sku: "MT-CAP", qty: 24 });
+  for (const z of ZONES) {
+    if (z.area === "rack-high" || z.area === "rack-mid") {
+      const racks = z.rackCount!;
+      const bays = z.baysPerRack!;
+      const lv = z.levels!;
+      for (let r = 0; r < racks; r++) {
+        for (let l = 0; l < lv; l++) {
+          for (let b = 0; b < bays; b++) {
+            const v = pickVariant(z.category, counter);
+            out.push({
+              id: `${z.id}-${counter}`,
+              sku: `${v.sku}-${String(100 + counter).padStart(3, "0")}`,
+              name: v.name,
+              variant: v.variant,
+              category: z.category,
+              zone: z.id,
+              area: z.area,
+              qty: v.qty,
+              updated: dateStr(counter),
+              bay: r * bays + b,
+              level: l,
+              cluster: 0,
+              cx: 0,
+              cy: 0,
+              stack: 0,
+              shelfLabel: `${String.fromCharCode(65 + r)}${b + 1}`,
+            });
+            counter++;
+          }
+        }
+      }
+    } else {
+      // floor-stack
+      const cls = z.clusters!;
+      const pc = z.palletCols!;
+      const pr = z.palletRows!;
+      const ms = z.maxStack!;
+      for (let c = 0; c < cls; c++) {
+        for (let cy = 0; cy < pr; cy++) {
+          for (let cx = 0; cx < pc; cx++) {
+            // varying stack height per column position
+            const stackH = ((c + cx + cy) % ms) + 1;
+            for (let s = 0; s < stackH; s++) {
+              const v = pickVariant(z.category, counter);
+              out.push({
+                id: `${z.id}-${counter}`,
+                sku: `${v.sku}-${String(100 + counter).padStart(3, "0")}`,
+                name: v.name,
+                variant: v.variant,
+                category: z.category,
+                zone: z.id,
+                area: z.area,
+                qty: v.qty,
+                updated: dateStr(counter),
+                bay: 0,
+                level: 0,
+                cluster: c,
+                cx,
+                cy,
+                stack: s,
+                shelfLabel: `P${c + 1}-${cx + 1}${cy + 1}`,
+              });
+              counter++;
+            }
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
 
-// Housing: 18 units
-for (let i = 0; i < 8; i++) plan.push({ cat: "housing", variant: "Housing Casing L", name: "Housing Casing L", sku: "HC-L", qty: 4 });
-for (let i = 0; i < 6; i++) plan.push({ cat: "housing", variant: "Housing Casing M", name: "Housing Casing M", sku: "HC-M", qty: 5 });
-for (let i = 0; i < 4; i++) plan.push({ cat: "housing", variant: "Mounting Bracket", name: "Ceiling Mount Bracket", sku: "HC-MB", qty: 12 });
-
-// Wiring: 16 units
-for (let i = 0; i < 8; i++) plan.push({ cat: "wiring", variant: "Wiring Kit Standard", name: "Wiring Kit Standard", sku: "WK-S", qty: 3 });
-for (let i = 0; i < 5; i++) plan.push({ cat: "wiring", variant: "Wiring Kit Premium", name: "Wiring Kit Premium", sku: "WK-P", qty: 4 });
-for (let i = 0; i < 3; i++) plan.push({ cat: "wiring", variant: "Remote Control Module", name: "RF Remote Module", sku: "WK-RF", qty: 9 });
-
-// Misc: 18 units
-for (let i = 0; i < 8; i++) plan.push({ cat: "misc", variant: "Screw Pack M6", name: "Screw Pack M6 (50pc)", sku: "MS-S6", qty: 30 });
-for (let i = 0; i < 6; i++) plan.push({ cat: "misc", variant: "Pull Chain", name: "Brass Pull Chain", sku: "MS-PC", qty: 14 });
-for (let i = 0; i < 4; i++) plan.push({ cat: "misc", variant: "Light Globe", name: "LED Light Globe", sku: "MS-LG", qty: 8 });
-
-// Lay out into zones, 15 per zone, 5 cols x 3 rows
-export const units: StorageUnit[] = plan.slice(0, 90).map((p, i) => {
-  const zoneIdx = Math.floor(i / 15);
-  const within = i % 15;
-  const cellCol = within % 5;
-  const cellRow = Math.floor(within / 5);
-  return makeUnit(i, zoneIdx, cellCol, cellRow, p.cat, p.variant, p.name, p.sku, p.qty);
-});
+export const units: StorageUnit[] = buildUnits();
 
 export const categoryOptions: Array<{ value: "all" | Category; label: string }> = [
   { value: "all", label: "All Products" },

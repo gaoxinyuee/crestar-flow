@@ -44,7 +44,7 @@ function WarehousePage() {
             <div className="text-xs font-semibold uppercase tracking-widest text-green">Digital Twin</div>
             <h2 className="text-2xl font-bold mt-1">Warehouse Floor — Tuas HQ</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Live view of 90 storage units across 6 zones · Last sync 12 sec ago
+              Mixed-layout view across 5 zones — high racking, mid shelving & open-floor stacks · Last sync 12 sec ago
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -99,12 +99,12 @@ function WarehousePage() {
 
           <div className="w-full flex items-center justify-between pt-2 border-t border-border">
             <div className="text-xs">
-              <span className="font-semibold text-foreground">Showing {visibleCount} of 90 units</span>
+              <span className="font-semibold text-foreground">Showing {visibleCount} of {units.length} units</span>
               {category !== "all" && (
                 <span className="text-muted-foreground"> — {categoryMeta[category as Category].label}{variant !== "all" ? ` · ${variant}` : ""}</span>
               )}
             </div>
-            <div className="text-[11px] text-muted-foreground">Tip: click any highlighted box to inspect</div>
+            <div className="text-[11px] text-muted-foreground">Drag to orbit · Scroll to zoom · Click a box to inspect</div>
           </div>
         </div>
 
