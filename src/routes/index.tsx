@@ -9,7 +9,6 @@ import {
   unitMatchesVariant,
   type Category,
   categoryMeta,
-  ZONES,
 } from "@/lib/warehouse-data";
 
 export const Route = createFileRoute("/")({
@@ -25,7 +24,6 @@ export const Route = createFileRoute("/")({
 function WarehousePage() {
   const [category, setCategory] = useState<"all" | Category>("all");
   const [variant, setVariant] = useState<string>("all");
-  const [focusZone, setFocusZone] = useState<"all" | string>("all");
 
   const visibleCount = useMemo(() => {
     return units.filter((u) => {
@@ -46,7 +44,7 @@ function WarehousePage() {
             <div className="text-xs font-semibold uppercase tracking-widest text-green">Digital Twin</div>
             <h2 className="text-2xl font-bold mt-1">Warehouse Floor — Tuas HQ</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Mixed-layout view across 5 zones — high racking, mid shelving & open-floor stacks · Last sync 12 sec ago
+              Live view of 90 storage units across 6 zones · Last sync 12 sec ago
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -57,20 +55,6 @@ function WarehousePage() {
 
         {/* Filter bar */}
         <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">View</label>
-            <select
-              value={focusZone}
-              onChange={(e) => setFocusZone(e.target.value)}
-              className="px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium"
-            >
-              <option value="all">Overall view (all zones)</option>
-              {ZONES.map((z) => (
-                <option key={z.id} value={z.id}>Zone {z.id} — {z.label}</option>
-              ))}
-            </select>
-          </div>
-
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Product</label>
             <select
@@ -115,18 +99,18 @@ function WarehousePage() {
 
           <div className="w-full flex items-center justify-between pt-2 border-t border-border">
             <div className="text-xs">
-              <span className="font-semibold text-foreground">Showing {visibleCount} of {units.length} units</span>
+              <span className="font-semibold text-foreground">Showing {visibleCount} of 90 units</span>
               {category !== "all" && (
                 <span className="text-muted-foreground"> — {categoryMeta[category as Category].label}{variant !== "all" ? ` · ${variant}` : ""}</span>
               )}
             </div>
-            <div className="text-[11px] text-muted-foreground">Drag to orbit · Scroll to zoom · Click a box to inspect</div>
+            <div className="text-[11px] text-muted-foreground">Tip: click any highlighted box to inspect</div>
           </div>
         </div>
 
         {/* Floor */}
         <div className="flex-1 bg-card border border-border rounded-xl min-h-[560px] overflow-hidden">
-          <WarehouseFloor category={category} variant={variant} focusZone={focusZone} />
+          <WarehouseFloor category={category} variant={variant} />
         </div>
       </div>
     </AppLayout>
