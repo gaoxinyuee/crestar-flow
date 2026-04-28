@@ -10,6 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoutesRouteImport } from './routes/routes'
+import { Route as OutboundRouteImport } from './routes/outbound'
+import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as InboundRouteImport } from './routes/inbound'
 import { Route as ForecastRouteImport } from './routes/forecast'
 import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as IndexRouteImport } from './routes/index'
@@ -17,6 +20,21 @@ import { Route as IndexRouteImport } from './routes/index'
 const RoutesRoute = RoutesRouteImport.update({
   id: '/routes',
   path: '/routes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OutboundRoute = OutboundRouteImport.update({
+  id: '/outbound',
+  path: '/outbound',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboundRoute = InboundRouteImport.update({
+  id: '/inbound',
+  path: '/inbound',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForecastRoute = ForecastRouteImport.update({
@@ -39,12 +57,18 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/assistant': typeof AssistantRoute
   '/forecast': typeof ForecastRoute
+  '/inbound': typeof InboundRoute
+  '/inventory': typeof InventoryRoute
+  '/outbound': typeof OutboundRoute
   '/routes': typeof RoutesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/assistant': typeof AssistantRoute
   '/forecast': typeof ForecastRoute
+  '/inbound': typeof InboundRoute
+  '/inventory': typeof InventoryRoute
+  '/outbound': typeof OutboundRoute
   '/routes': typeof RoutesRoute
 }
 export interface FileRoutesById {
@@ -52,20 +76,48 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/assistant': typeof AssistantRoute
   '/forecast': typeof ForecastRoute
+  '/inbound': typeof InboundRoute
+  '/inventory': typeof InventoryRoute
+  '/outbound': typeof OutboundRoute
   '/routes': typeof RoutesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/assistant' | '/forecast' | '/routes'
+  fullPaths:
+    | '/'
+    | '/assistant'
+    | '/forecast'
+    | '/inbound'
+    | '/inventory'
+    | '/outbound'
+    | '/routes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/assistant' | '/forecast' | '/routes'
-  id: '__root__' | '/' | '/assistant' | '/forecast' | '/routes'
+  to:
+    | '/'
+    | '/assistant'
+    | '/forecast'
+    | '/inbound'
+    | '/inventory'
+    | '/outbound'
+    | '/routes'
+  id:
+    | '__root__'
+    | '/'
+    | '/assistant'
+    | '/forecast'
+    | '/inbound'
+    | '/inventory'
+    | '/outbound'
+    | '/routes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AssistantRoute: typeof AssistantRoute
   ForecastRoute: typeof ForecastRoute
+  InboundRoute: typeof InboundRoute
+  InventoryRoute: typeof InventoryRoute
+  OutboundRoute: typeof OutboundRoute
   RoutesRoute: typeof RoutesRoute
 }
 
@@ -76,6 +128,27 @@ declare module '@tanstack/react-router' {
       path: '/routes'
       fullPath: '/routes'
       preLoaderRoute: typeof RoutesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/outbound': {
+      id: '/outbound'
+      path: '/outbound'
+      fullPath: '/outbound'
+      preLoaderRoute: typeof OutboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbound': {
+      id: '/inbound'
+      path: '/inbound'
+      fullPath: '/inbound'
+      preLoaderRoute: typeof InboundRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forecast': {
@@ -106,6 +179,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AssistantRoute: AssistantRoute,
   ForecastRoute: ForecastRoute,
+  InboundRoute: InboundRoute,
+  InventoryRoute: InventoryRoute,
+  OutboundRoute: OutboundRoute,
   RoutesRoute: RoutesRoute,
 }
 export const routeTree = rootRouteImport

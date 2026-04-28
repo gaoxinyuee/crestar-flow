@@ -1,10 +1,13 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Boxes, LineChart, Map, Bot, Warehouse } from "lucide-react";
+import { Boxes, LineChart, Map, Bot, Warehouse, Package, Truck, ShoppingCart } from "lucide-react";
 import type { ReactNode } from "react";
 
 const navItems = [
   { to: "/", label: "Warehouse View", icon: Boxes },
   { to: "/forecast", label: "Demand Forecast", icon: LineChart },
+  { to: "/inventory", label: "Inventory", icon: Package },
+  { to: "/inbound", label: "Inbound Shipments", icon: Truck },
+  { to: "/outbound", label: "Outbound Orders", icon: ShoppingCart },
   { to: "/routes", label: "Route Optimisation", icon: Map },
   { to: "/assistant", label: "AI Assistant", icon: Bot },
 ] as const;
