@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoutesRouteImport } from './routes/routes'
+import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as ForecastRouteImport } from './routes/forecast'
 import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as IndexRouteImport } from './routes/index'
@@ -17,6 +18,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const RoutesRoute = RoutesRouteImport.update({
   id: '/routes',
   path: '/routes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForecastRoute = ForecastRouteImport.update({
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/assistant': typeof AssistantRoute
   '/forecast': typeof ForecastRoute
+  '/inventory': typeof InventoryRoute
   '/routes': typeof RoutesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/assistant': typeof AssistantRoute
   '/forecast': typeof ForecastRoute
+  '/inventory': typeof InventoryRoute
   '/routes': typeof RoutesRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/assistant': typeof AssistantRoute
   '/forecast': typeof ForecastRoute
+  '/inventory': typeof InventoryRoute
   '/routes': typeof RoutesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/assistant' | '/forecast' | '/routes'
+  fullPaths: '/' | '/assistant' | '/forecast' | '/inventory' | '/routes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/assistant' | '/forecast' | '/routes'
-  id: '__root__' | '/' | '/assistant' | '/forecast' | '/routes'
+  to: '/' | '/assistant' | '/forecast' | '/inventory' | '/routes'
+  id: '__root__' | '/' | '/assistant' | '/forecast' | '/inventory' | '/routes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AssistantRoute: typeof AssistantRoute
   ForecastRoute: typeof ForecastRoute
+  InventoryRoute: typeof InventoryRoute
   RoutesRoute: typeof RoutesRoute
 }
 
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/routes'
       fullPath: '/routes'
       preLoaderRoute: typeof RoutesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forecast': {
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AssistantRoute: AssistantRoute,
   ForecastRoute: ForecastRoute,
+  InventoryRoute: InventoryRoute,
   RoutesRoute: RoutesRoute,
 }
 export const routeTree = rootRouteImport
