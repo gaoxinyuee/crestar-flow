@@ -12,6 +12,7 @@ Endpoints:
     GET  /warehouse/kpis         — Dashboard KPIs JSON
     POST /chat                   — Non-streaming response
     POST /chat/stream            — SSE streaming response
+    GET  /api/warehouse/zones    — Zone-level summary (slots, occupancy, SKU list)
 """
 
 import os
@@ -242,6 +243,57 @@ async def warehouse_3d():
         d["low_stock"] = d["product_id"] in low_stock_ids
         pallets.append(d)
     return {"pallets": pallets}
+
+
+@app.get("/api/warehouse/zones")
+async def warehouse_zones():
+    """
+    Zone-level summary for all 5 warehouse zones (A–E).
+
+    Returns for each zone:
+      zone_id          — letter key (A–E)
+      zone_name        — full descriptive name from the zones table
+      zone_type        — storage type (Rack Storage / Open Storage)
+      primary_category — product families stored there
+      total_slots      — designed slot capacity from the zones table
+      occupied_slots   — slots currently holding stock (quantity > 0)
+      occupancy_pct    — occupied_slots / total_slots × 100, rounded to 1 dp
+      skus             — list of distinct product_ids present in the zone
+    """
+    with database.get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                z.zone_id,
+                z.name            AS zone_name,
+                z.zone_type,
+                z.primary_category,
+                z.capacity_slots  AS total_slots,
+                COUNT(CASE WHEN i.quantity > 0 THEN 1 END)   AS occupied_slots,
+                GROUP_CONCAT(DISTINCT i.product_id)           AS sku_list
+            FROM zones z
+            LEFT JOIN inventory i ON i.zone = z.zone_id
+            GROUP BY z.zone_id
+            ORDER BY z.zone_id
+        """).fetchall()
+
+    zones = []
+    for r in rows:
+        d = dict(r)
+        total = d["total_slots"] or 1
+        occupied = d["occupied_slots"] or 0
+        skus = sorted(d["sku_list"].split(",")) if d["sku_list"] else []
+        zones.append({
+            "zone_id":          d["zone_id"],
+            "zone_name":        d["zone_name"],
+            "zone_type":        d["zone_type"],
+            "primary_category": d["primary_category"],
+            "total_slots":      total,
+            "occupied_slots":   occupied,
+            "occupancy_pct":    round(occupied / total * 100, 1),
+            "skus":             skus,
+        })
+
+    return {"zones": zones, "zone_count": len(zones)}
 
 
 @app.get("/warehouse/inventory")
