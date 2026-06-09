@@ -45,6 +45,9 @@ def _allowed_origins() -> list[str]:
         "http://localhost:8501",   # Streamlit
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8501",
+        # Vercel deployments
+        "https://crestar-flow.vercel.app",
+        "https://crestar-flow-keqt62qh5-xinyuer-s-projects1.vercel.app",
     ]
     extra = [
         origin.strip()
@@ -68,6 +71,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),
+    allow_origin_regex=r"https://.*\.vercel\.app",  # all Vercel preview URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
