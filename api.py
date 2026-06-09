@@ -14,12 +14,15 @@ Endpoints:
     POST /chat/stream            — SSE streaming response
 """
 
+import os
 import json
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import AsyncIterator
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -29,6 +32,25 @@ import chatbot
 import database
 import forecasting
 import lta
+
+load_dotenv()   # pick up .env so API keys are available at startup
+
+
+def _allowed_origins() -> list[str]:
+    defaults = [
+        "http://localhost:5173",   # Vite / React dev server
+        "http://localhost:3000",   # CRA / Next.js
+        "http://localhost:8080",   # alternative dev server
+        "http://localhost:8501",   # Streamlit
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8501",
+    ]
+    extra = [
+        origin.strip()
+        for origin in os.environ.get("ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    return defaults + extra
 
 # ─── App setup ─────────────────────────────────────────────────────────────────
 
@@ -44,14 +66,7 @@ app = FastAPI(
 # Allow all localhost origins so the React dev server and Streamlit can both call this.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite / React dev server
-        "http://localhost:3000",   # CRA / Next.js
-        "http://localhost:8080",   # alternative dev server
-        "http://localhost:8501",   # Streamlit
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:8501",
-    ],
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,6 +83,14 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[Message]
     model: str = "llama3"
+
+
+class MarketSignal(BaseModel):
+    signal_type: str
+    title: str
+    impact_direction: str
+    affected_categories: list[str]
+    description: str
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -87,6 +110,60 @@ async def _ollama_available() -> bool:
             return r.status_code == 200
     except Exception:
         return False
+
+
+def _extract_json_object(text: str) -> dict:
+    """Parse a JSON object from a model response that may include prose or fences."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.removeprefix("```json").removeprefix("```").strip()
+        cleaned = cleaned.removesuffix("```").strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise
+        return json.loads(cleaned[start:end + 1])
+
+
+def _normalize_market_signals(raw_signals: list[dict]) -> list[MarketSignal]:
+    allowed_types = {"holiday", "weather", "industry"}
+    allowed_impacts = {"up", "down", "uncertain"}
+    normalized: list[MarketSignal] = []
+
+    for raw in raw_signals[:6]:
+        signal_type = str(raw.get("signal_type", "industry")).lower().strip()
+        impact = str(raw.get("impact_direction", "uncertain")).lower().strip()
+        categories = raw.get("affected_categories", [])
+        if not isinstance(categories, list):
+            categories = [str(categories)]
+
+        normalized.append(MarketSignal(
+            signal_type=signal_type if signal_type in allowed_types else "industry",
+            title=str(raw.get("title", "Market signal")).strip()[:80],
+            impact_direction=impact if impact in allowed_impacts else "uncertain",
+            affected_categories=[str(c).strip() for c in categories if str(c).strip()][:5],
+            description=str(raw.get("description", "")).strip()[:320],
+        ))
+
+    return normalized
+
+
+def _extract_openai_text(payload: dict) -> str:
+    """Extract text from an OpenAI Responses API payload."""
+    if isinstance(payload.get("output_text"), str):
+        return payload["output_text"]
+
+    parts: list[str] = []
+    for item in payload.get("output", []):
+        for content in item.get("content", []):
+            text = content.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
 
 
 # ─── Routes ────────────────────────────────────────────────────────────────────
@@ -345,12 +422,135 @@ async def forecast_run():
     return {"status": "ok", "skus_forecasted": len(results)}
 
 
+@app.get("/api/market-signals")
+async def market_signals():
+    """
+    Scan current Singapore market signals that could shift demand for Crestar SKUs.
+
+    Uses OpenAI's hosted web search tool when OPENAI_API_KEY is configured.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
+
+    categories = database._query_rows("""
+        SELECT DISTINCT category
+        FROM products
+        ORDER BY category
+    """)
+    category_names = [r["category"] for r in categories]
+    today = datetime.now(ZoneInfo("Asia/Singapore")).date().isoformat()
+    model = os.environ.get("OPENAI_MARKET_MODEL", "gpt-4.1-mini")
+
+    prompt = f"""
+Today is {today} in Singapore.
+
+Scan the web for current external demand signals that could affect a Singapore
+warehouse carrying ceiling fan components, electrical fittings, lighting parts,
+hardware, and home-furnishing-related fan accessories.
+
+Look specifically for:
+1. Upcoming Singapore public holidays or festive seasons in the next 4-6 weeks.
+2. Current or forecast Singapore weather/seasonal patterns such as monsoon
+   conditions, haze, dry spell, or sustained heat.
+3. Recent Singapore industry or policy news relevant to fans, electrical
+   fittings, home furnishing, HDB BTO launches, BCA policies, renovation, or
+   construction activity.
+
+Inventory categories to prefer when relevant:
+{", ".join(category_names)}
+
+Return only valid JSON. Do not include markdown, citations, or commentary.
+Use this exact shape:
+{{
+  "signals": [
+    {{
+      "signal_type": "holiday | weather | industry",
+      "title": "short label",
+      "impact_direction": "up | down | uncertain",
+      "affected_categories": ["category or product family labels"],
+      "description": "1-2 sentence explanation"
+    }}
+  ]
+}}
+
+Return 3 to 5 signals. If evidence is mixed, use impact_direction "uncertain".
+Keep descriptions concise and operational for purchasing planners.
+"""
+
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/responses",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "input": prompt,
+                    "max_output_tokens": 1200,
+                    "temperature": 0.1,
+                    "tool_choice": "required",
+                    "tools": [{
+                        "type": "web_search",
+                        "user_location": {
+                            "type": "approximate",
+                            "city": "Singapore",
+                            "region": "Singapore",
+                            "country": "SG",
+                            "timezone": "Asia/Singapore",
+                        },
+                    }],
+                },
+            )
+            resp.raise_for_status()
+
+        text = _extract_openai_text(resp.json())
+        if not text:
+            raise RuntimeError("OpenAI returned no text output")
+
+        payload = _extract_json_object(text)
+        signals = _normalize_market_signals(payload.get("signals", []))
+        return {
+            "signals": [s.dict() for s in signals],
+            "scanned_at": datetime.utcnow().isoformat() + "Z",
+            "model": model,
+        }
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text[:500]
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI market signal scan failed with HTTP {e.response.status_code}: {detail}",
+        )
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=502, detail=f"Could not parse market signal response: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Market signal scan failed: {e}")
+
+
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     """
-    Non-streaming chat. Returns the full assistant response as a JSON object.
-    Use /chat/stream for a better UX when the user is waiting for a long response.
+    Non-streaming chat. Uses Claude when ANTHROPIC_API_KEY is set, else Ollama.
     """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        try:
+            import anthropic
+            client = anthropic.AsyncAnthropic(api_key=api_key)
+            sys_prompt = chatbot.build_system_prompt()
+            msgs = [{"role": m.role, "content": m.content} for m in req.messages]
+            resp = await client.messages.create(
+                model=chatbot.CLAUDE_MODEL,
+                max_tokens=1024,
+                system=sys_prompt,
+                messages=msgs,
+            )
+            return {"role": "assistant", "content": resp.content[0].text, "model": chatbot.CLAUDE_MODEL}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
     messages = _to_ollama_messages(req)
     try:
         async with httpx.AsyncClient(timeout=chatbot.REQUEST_TIMEOUT) as client:
@@ -369,11 +569,7 @@ async def chat_endpoint(req: ChatRequest):
     except httpx.ConnectError:
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Ollama is not running. "
-                "Start it with: ollama serve  "
-                "Then pull a model: ollama pull llama3"
-            ),
+            detail="Ollama is not running. Start it with: ollama serve",
         )
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=str(e))
@@ -401,6 +597,37 @@ async def chat_stream_endpoint(req: ChatRequest):
     async def generate() -> AsyncIterator[str]:
         stream_start = time.monotonic()
         chunk_count = 0
+
+        # ── Claude path (preferred when API key is present) ───────────────────
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key and req.model.startswith("claude"):
+            try:
+                import anthropic
+                client = anthropic.AsyncAnthropic(api_key=api_key)
+                sys_prompt = chatbot.build_system_prompt()
+                msgs = [{"role": m.role, "content": m.content} for m in req.messages]
+                print(f"[STREAM] Using Claude ({chatbot.CLAUDE_MODEL})")
+                async with client.messages.stream(
+                    model=chatbot.CLAUDE_MODEL,
+                    max_tokens=1024,
+                    system=sys_prompt,
+                    messages=msgs,
+                ) as stream:
+                    async for text in stream.text_stream:
+                        chunk_count += 1
+                        if chunk_count == 1:
+                            print(f"[STREAM] First token after {time.monotonic()-stream_start:.1f}s")
+                        yield f"data: {json.dumps({'content': text})}\n\n"
+                elapsed = round(time.monotonic() - stream_start, 2)
+                print(f"[STREAM] Claude done — {chunk_count} chunks in {elapsed}s")
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                print(f"[STREAM] Claude error: {e}")
+                yield f"data: {json.dumps({'content': f'**Claude error:** {e}'})}\n\n"
+                yield "data: [DONE]\n\n"
+            return
+
+        # ── Ollama fallback ───────────────────────────────────────────────────
         try:
             print(f"[STREAM] Connecting to Ollama ({chatbot.OLLAMA_CHAT}) ...")
             async with httpx.AsyncClient(timeout=chatbot.REQUEST_TIMEOUT) as client:
@@ -449,13 +676,7 @@ async def chat_stream_endpoint(req: ChatRequest):
         except httpx.ReadTimeout as e:
             elapsed = round(time.monotonic() - stream_start, 2)
             print(f"[STREAM] ReadTimeout after {elapsed}s (REQUEST_TIMEOUT={chatbot.REQUEST_TIMEOUT}s): {e}")
-            msg = (
-                f"**Timed out waiting for {req.model}** after {elapsed}s.\n\n"
-                "Try:\n"
-                f"- `ollama pull {req.model}` to ensure the model is downloaded\n"
-                "- Use `llama3.2:1b` for faster responses on CPU\n"
-                "- Check `GET /test-ollama` to benchmark raw Ollama latency"
-            )
+            msg = "Still thinking... the AI is processing locally. Try a simpler question or wait a moment."
             yield f"data: {json.dumps({'content': msg})}\n\n"
             yield "data: [DONE]\n\n"
 

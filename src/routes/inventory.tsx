@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { API_BASE } from "@/lib/api";
 import { Search, Download, ScanLine, X, Camera, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/inventory")({
@@ -12,8 +13,6 @@ export const Route = createFileRoute("/inventory")({
   }),
   component: InventoryPage,
 });
-
-const API_BASE = "http://localhost:8000";
 
 type Status = "Healthy" | "Low" | "Critical";
 

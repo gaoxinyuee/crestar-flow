@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppLayout } from "@/components/AppLayout";
+import { API_BASE } from "@/lib/api";
 import { Bot, Send, User, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 
@@ -29,9 +30,11 @@ type ApiStatus = "checking" | "ok" | "down";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
-const API_BASE = "http://localhost:8000";
-
-const MODELS = ["llama3.1", "llama3.2:1b"];
+const MODELS: { value: string; label: string; cloud?: boolean }[] = [
+  { value: "claude-haiku-4-5-20251001", label: "Claude (claude-haiku-4-5) · Fast", cloud: true },
+  { value: "llama3.2:1b",              label: "llama3.2:1b · Local" },
+  { value: "llama3.1",                 label: "llama3.1 · Local" },
+];
 
 const GREETING: Msg = {
   role: "ai",
@@ -163,14 +166,15 @@ function AssistantPage() {
   const [history,    setHistory]    = useState<ApiMsg[]>([]);   // sent to API (no greeting)
   const [input,      setInput]      = useState("");
   const [streaming,  setStreaming]  = useState(false);
-  const [model,      setModel]      = useState("llama3.2:1b");
+  const [model,      setModel]      = useState("claude-haiku-4-5-20251001");
   const [apiStatus,  setApiStatus]  = useState<ApiStatus>("checking");
   const [showModels, setShowModels] = useState(false);
 
-  const streamRef  = useRef("");           // accumulates content during streaming
-  const abortRef   = useRef<AbortController | null>(null);
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const inputRef   = useRef<HTMLInputElement>(null);
+  const streamRef   = useRef("");           // accumulates content during streaming
+  const abortRef    = useRef<AbortController | null>(null);
+  const timeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bottomRef   = useRef<HTMLDivElement>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
 
   // ── Health check ─────────────────────────────────────────────────────────────
   const checkHealth = useCallback(async () => {
@@ -209,6 +213,22 @@ function AssistantPage() {
       setMessages((prev) => [...prev, userMsg, emptyAi]);
       setStreaming(true);
       streamRef.current = "";
+
+      // 60-second client-side guard: fires only if no first token has arrived
+      timeoutRef.current = setTimeout(() => {
+        if (streamRef.current.length === 0) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              role: "ai",
+              content: "Still thinking... the AI is processing locally. Try a simpler question or wait a moment.",
+            };
+            return next;
+          });
+          abortRef.current?.abort();
+          setStreaming(false);
+        }
+      }, 60_000);
 
       const outboundHistory = [...history, apiMsg];
 
@@ -304,6 +324,10 @@ function AssistantPage() {
         });
         setApiStatus("down");
       } finally {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
         setStreaming(false);
         setTimeout(() => inputRef.current?.focus(), 50);
       }
@@ -312,11 +336,13 @@ function AssistantPage() {
   );
 
   const stopStream = () => {
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     abortRef.current?.abort();
     setStreaming(false);
   };
 
   const clearChat = () => {
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     setMessages([GREETING]);
     setHistory([]);
     setInput("");
@@ -366,7 +392,7 @@ function AssistantPage() {
               </span>
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              Powered by Ollama · Grounded in live warehouse.db
+              {model.startsWith("claude") ? "Powered by Claude API" : "Powered by Ollama"} · Grounded in live warehouse.db
             </div>
           </div>
 
@@ -376,21 +402,25 @@ function AssistantPage() {
               <button
                 onClick={() => setShowModels(!showModels)}
                 className="text-xs px-2.5 py-1.5 rounded-md border border-border bg-background
-                           hover:bg-muted transition-colors font-mono"
+                           hover:bg-muted transition-colors"
               >
-                {model} ▾
+                {MODELS.find((m) => m.value === model)?.label ?? model} ▾
               </button>
               {showModels && (
                 <div className="absolute right-0 top-8 z-20 bg-card border border-border
-                                rounded-lg shadow-lg py-1 min-w-[140px]">
+                                rounded-lg shadow-lg py-1 min-w-[220px]">
                   {MODELS.map((m) => (
                     <button
-                      key={m}
-                      onClick={() => { setModel(m); setShowModels(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors font-mono
-                        ${m === model ? "text-green-600 font-semibold" : ""}`}
+                      key={m.value}
+                      onClick={() => { setModel(m.value); setShowModels(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors
+                        ${m.value === model ? "text-green-600 font-semibold" : ""}`}
                     >
-                      {m}
+                      {m.label}
+                      {m.cloud && (
+                        <span className="ml-1.5 text-[9px] uppercase tracking-wider
+                                         text-blue-500 font-bold">cloud</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -532,7 +562,7 @@ function AssistantPage() {
             </div>
 
             <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-              Answers are grounded in live warehouse.db data · Model: {model}
+              Answers are grounded in live warehouse.db data · {MODELS.find((m) => m.value === model)?.label ?? model}
             </p>
           </div>
         </div>

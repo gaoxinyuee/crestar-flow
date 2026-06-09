@@ -20,8 +20,24 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "warehouse.db
 
 # ─── Connection ────────────────────────────────────────────────────────────────
 
+def _ensure_db_exists() -> None:
+    """Create the packaged demo database when a fresh deploy has no SQLite file."""
+    if os.path.exists(DB_PATH):
+        return
+
+    import create_db
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.executescript(create_db.SCHEMA)
+        create_db.seed(conn)
+    finally:
+        conn.close()
+
+
 def get_db() -> sqlite3.Connection:
     """Return a read-optimised connection with row_factory set."""
+    _ensure_db_exists()
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

@@ -6,6 +6,7 @@
 import { useRef, useState, useEffect, useMemo, Suspense } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
+import { API_BASE } from "@/lib/api";
 import * as THREE from "three";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -123,8 +124,6 @@ const E_ROWS   = [5.5, 7.5, 9.5] as const;
 const E_LEVELS = 2;
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-
-const API_BASE = "http://localhost:8000";
 
 const ZONE_BOUNDS: Record<string, [number, number, number, number]> = {
   A: [-24, -15, -16,  16],
