@@ -94,7 +94,7 @@ def get_inventory_summary() -> pd.DataFrame:
             p.product_id,
             p.name,
             p.category,
-            GROUP_CONCAT(DISTINCT i.zone ORDER BY i.zone) AS zone_list,
+            GROUP_CONCAT(DISTINCT i.zone)                 AS zone_list,
             MIN(i.zone)                                   AS primary_zone,
             COALESCE(SUM(i.quantity), 0)                  AS total_qty,
             p.reorder_point,
@@ -133,8 +133,7 @@ def get_low_stock_alerts() -> list[dict]:
                 WHEN COALESCE(SUM(i.quantity),0) = 0     THEN 'Out of Stock'
                 ELSE 'Low Stock'
             END                                          AS stock_status,
-            GROUP_CONCAT(DISTINCT i.zone || '-' || i.rack || '-' || i.level
-                         ORDER BY i.zone) AS locations
+            GROUP_CONCAT(DISTINCT i.zone || '-' || i.rack || '-' || i.level) AS locations
         FROM      products p
         LEFT JOIN inventory i USING (product_id)
         GROUP BY  p.product_id, p.name, p.category,
@@ -173,8 +172,7 @@ def search_inventory(query: str) -> pd.DataFrame:
             p.name,
             p.category,
             p.supplier,
-            GROUP_CONCAT(DISTINCT i.zone || '-' || i.rack || '-' || i.level
-                         ORDER BY i.zone) AS locations,
+            GROUP_CONCAT(DISTINCT i.zone || '-' || i.rack || '-' || i.level) AS locations,
             COALESCE(SUM(i.quantity), 0)  AS total_qty,
             p.reorder_point,
             CASE

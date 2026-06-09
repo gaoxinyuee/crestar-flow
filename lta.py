@@ -25,6 +25,7 @@ _SEVERITY: dict[str, str] = {
     "Accident":            "heavy",
     "Road Closure":        "heavy",
     "Bus Accident":        "heavy",
+    "Heavy Traffic":       "heavy",    # expressway / arterial congestion
     "Vehicle Breakdown":   "moderate",
     "Road Works":          "moderate",
     "Traffic Light Fault": "moderate",
