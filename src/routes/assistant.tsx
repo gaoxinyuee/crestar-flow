@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppLayout } from "@/components/AppLayout";
 import { API_BASE } from "@/lib/api";
 import { Bot, Send, User, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 export const Route = createFileRoute("/assistant")({
@@ -161,7 +162,7 @@ function MessageBody({ content, streaming }: { content: string; streaming?: bool
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-function AssistantPage() {
+function AssistantContent() {
   const [messages,   setMessages]   = useState<Msg[]>([GREETING]);
   const [history,    setHistory]    = useState<ApiMsg[]>([]);   // sent to API (no greeting)
   const [input,      setInput]      = useState("");
@@ -310,12 +311,19 @@ function AssistantPage() {
         }
         console.error("[CHAT] Fetch/stream error:", err);
 
-        const errContent =
-          "**Could not reach the warehouse AI API.**\n\n" +
-          "Make sure the FastAPI server is running:\n" +
-          "```\nuvicorn api:app --reload --port 8000\n```\n" +
-          "And that Ollama is running:\n" +
-          "```\nollama serve\n```";
+        const statusCode =
+          err instanceof Error
+            ? (err.message.match(/^HTTP (\d+)/) ?? [])[1]
+            : null;
+        const isServerError = statusCode != null && parseInt(statusCode) >= 500;
+
+        const errContent = isServerError
+          ? "**The backend is starting up.** Please wait a moment and try again — the server may be cold-starting.\n\nIf this persists after 30 seconds, check that the API server is running."
+          : "**Could not reach the warehouse AI API.**\n\n" +
+            "Make sure the FastAPI server is running:\n" +
+            "```\nuvicorn api:app --reload --port 8000\n```\n" +
+            "And that Ollama is running:\n" +
+            "```\nollama serve\n```";
 
         setMessages((prev) => {
           const next = [...prev];
@@ -359,7 +367,6 @@ function AssistantPage() {
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <AppLayout>
       <div className="h-full flex flex-col bg-muted/30">
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -568,6 +575,15 @@ function AssistantPage() {
         </div>
 
       </div>
+  );
+}
+
+function AssistantPage() {
+  return (
+    <AppLayout>
+      <PageErrorBoundary>
+        <AssistantContent />
+      </PageErrorBoundary>
     </AppLayout>
   );
 }

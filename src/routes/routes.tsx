@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import "leaflet/dist/leaflet.css";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 
 export const Route = createFileRoute("/routes")({
   head: () => ({
@@ -274,10 +275,14 @@ function PlanMap({ plans }: { plans: DriverPlan[] }) {
   );
 
   useEffect(() => {
-    Promise.all([import("leaflet"), import("react-leaflet")]).then(([l, m]) => {
-      setL(l);
-      setMapCmp(m);
-    });
+    Promise.all([import("leaflet"), import("react-leaflet")])
+      .then(([l, m]) => {
+        setL(l);
+        setMapCmp(m);
+      })
+      .catch((err) => {
+        console.error("[PlanMap] Failed to load map libraries:", err);
+      });
   }, []);
 
   if (!L || !MapCmp) {
@@ -764,7 +769,7 @@ function newStop(): DeliveryStop {
 
 // ─── Page ───────────────────────────────────────────────────────────────────────
 
-function RoutesPage() {
+function RoutesMainContent() {
   const [mode, setMode] = useState<PageMode>("planning");
   const [drivers, setDrivers] = useState<Driver[]>([newDriver(0)]);
   const [stops, setStops] = useState<DeliveryStop[]>([newStop()]);
@@ -856,7 +861,6 @@ function RoutesPage() {
   }, [drivers, stops]);
 
   return (
-    <AppLayout>
       <div className="p-6 space-y-5">
 
         {/* Header */}
@@ -1133,6 +1137,15 @@ function RoutesPage() {
           />
         )}
       </div>
+  );
+}
+
+function RoutesPage() {
+  return (
+    <AppLayout>
+      <PageErrorBoundary>
+        <RoutesMainContent />
+      </PageErrorBoundary>
     </AppLayout>
   );
 }

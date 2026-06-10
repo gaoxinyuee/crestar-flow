@@ -5,6 +5,33 @@ Each entry has two sections: **Technical** (for NTU report) and **Non-Technical*
 
 ---
 
+## [2026-06-10] — Fix: Route Optimisation and AI Assistant blank-page crashes
+
+### Technical (NTU Report)
+
+**Files created:** `src/components/PageErrorBoundary.tsx`
+**Files modified:** `src/routes/routes.tsx`, `src/routes/assistant.tsx`
+
+**Root causes identified and fixed:**
+
+1. **No React error boundary** — both pages had no error boundary; any synchronous render error caused the entire React tree inside `<div id="root">` to unmount, producing a blank white page with no visible feedback. Fix: new `PageErrorBoundary` class component using `getDerivedStateFromError` + `componentDidCatch`. The boundary is placed *inside* `<AppLayout>` so the sidebar remains visible on failure. Each page was split into a thin `RoutesPage`/`AssistantPage` shell (AppLayout + boundary) and a `RoutesMainContent`/`AssistantContent` inner component that the boundary guards.
+
+2. **Unhandled promise rejection in `PlanMap`** (`routes.tsx`) — `Promise.all([import("leaflet"), import("react-leaflet")])` had no `.catch()`. A failed dynamic import (possible on first cold Vercel edge) threw an unhandled rejection, crashing React before the error boundary could intercept it. Fix: added `.catch((err) => console.error(...))` to prevent the unhandled rejection.
+
+3. **Misleading 5xx error message** (`assistant.tsx`) — when the FastAPI backend returned HTTP 502/503/504 (cold-start latency on Render/Railway), the error message displayed developer instructions (`uvicorn`, `ollama serve`) that are meaningless on Vercel. Fix: detect `HTTP 5xx` via regex on `err.message`; show "backend is starting up, please wait" for server errors, and keep the developer message for network-level failures (no response at all).
+
+**Pattern:** `componentDidCatch` logs `error` + `info.componentStack` via `console.error` for future debugging.
+
+### Non-Technical (IMDA Presentation)
+
+**What was happening:** Opening the Route Optimisation or AI Assistant page sometimes caused the entire page to go white and stop responding — with no error message shown to the user.
+
+**Why it happened:** Two separate issues. First, neither page had a "safety net" (error boundary) — if anything went wrong during rendering, the whole page would silently disappear. Second, when the AI backend server took too long to wake up (common on free-tier cloud hosting), the AI chat page showed instructions meant for developers ("run uvicorn…") rather than a helpful message.
+
+**What was fixed:** Both pages now have a safety net: if they crash, users see a clear "Something went wrong — the backend may be starting up" message with a **Try again** button, instead of a blank screen. The AI assistant also now shows "Backend is starting up, please wait a moment" when the server is warming up, rather than confusing developer instructions.
+
+---
+
 ## [2026-06-10] — Fix: /routes blank page on direct navigation (Vercel)
 
 ### Technical (NTU Report)
