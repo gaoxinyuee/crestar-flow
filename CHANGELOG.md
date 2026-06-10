@@ -5,6 +5,28 @@ Each entry has two sections: **Technical** (for NTU report) and **Non-Technical*
 
 ---
 
+## [2026-06-10] — Fix: /routes blank page on direct navigation (Vercel)
+
+### Technical (NTU Report)
+
+**Files modified:** `vite.config.ts`
+
+**Root cause:** `@tanstack/router-plugin` was installed as a dependency but not registered in `vite.config.ts`. Without the plugin, TanStack Router's build-time processing (route tree regeneration and virtual module injection) did not run during Vercel's CI build. On client-side navigation the route worked because `routeTree.gen.ts` was committed; on direct URL navigation, Vercel served `index.html` via the SPA rewrite but the router could not correctly resolve the `/routes` path without the plugin's build artefacts.
+
+**Fix:** Added `TanStackRouterVite({ routesDirectory: './src/routes' })` as the first plugin in `vite.config.ts`. The plugin now regenerates `routeTree.gen.ts` on every build and wires up the internal virtual modules TanStack Router expects, so all routes — including `/routes` — resolve correctly on hard navigation.
+
+No path mismatch was found: the route definition (`createFileRoute("/routes")`), the generated route tree, and the sidebar link (`to: "/routes"`) were all consistent. The fix is purely a build-pipeline gap.
+
+### Non-Technical (IMDA Presentation)
+
+**What was happening:** Clicking "Route Optimisation" in the sidebar worked fine, but typing or pasting the direct link `…/routes` into the browser showed a blank white page.
+
+**Why it happened:** A required build tool that sets up the page routing system was installed in the project but accidentally left out of the build configuration file. When the site was deployed to Vercel, that tool never ran, so the routing for the Route Optimisation page was incomplete.
+
+**What was fixed:** The build configuration (`vite.config.ts`) was updated to include the routing tool. The next Vercel deployment will regenerate the routing map automatically, and the `/routes` page will load correctly on both direct navigation and sidebar clicks.
+
+---
+
 ## [1.0.0] — 2026-05-05 — Three.js 3D Warehouse Digital Twin
 
 ### Technical (NTU Report)
